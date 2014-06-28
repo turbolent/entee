@@ -13,10 +13,4 @@ struct entee_parser_s {
     void *handler_arg;
 };
 
-
-// typedef void (*ParseCallbackFunction)(Triple *triple, void *callback_arg);
-
-//int parse(ParseReadFunction read_fn, void *read_arg,
-//          ParseCallbackFunction callback_fn, void *callback_arg);
-
 #endif /* ENTEE_PARSER_INTERNAL_H_ */

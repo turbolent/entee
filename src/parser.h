@@ -1,8 +1,6 @@
 #ifndef ENTEE_PARSER_H_
 #define ENTEE_PARSER_H_
 
-#include "string.h"
-
 typedef struct entee_parser_s entee_parser;
 
 entee_parser *entee_new_parser();
@@ -28,10 +26,10 @@ typedef enum {
     ENTEE_DATATYPE_LITERAL_IRI,
 } entee_token_type;
 
-typedef void (*entee_handler)(entee_token_type type, string *s);
+typedef void (*entee_handler)(entee_token_type type, const char *s);
 
 void entee_parser_set_handler(entee_parser *parser,
-                              entee_handler handlerr,
+                              entee_handler handler,
                               void *handler_arg);
 
 

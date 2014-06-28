@@ -21,8 +21,8 @@ int read_bzip(unsigned char* p, unsigned int len, void *read_arg) {
     return BZ2_bzread(file, p, len);
 }
 
-void handler(entee_token_type type, string *s) {
-    printf("%d => %s\n", type, s->chars);
+void handler(entee_token_type type, const char *s) {
+     printf("%d => %s\n", type, s);
 }
 
 
