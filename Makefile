@@ -1,7 +1,17 @@
+NAME := entee
+CC := clang
 CFLAGS := -fPIC -std=c99 -pedantic -O3 -march=native -g \
 	-Wall -Werror -Wextra -Winline  -Wno-unused-variable -Wno-unused-parameter
-CC := clang
-NAME := entee
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+  EXT = so 
+  LDFLAGS := -shared -Wl,-soname,lib$(NAME).$(EXT)
+endif
+ifeq ($(UNAME_S),Darwin)
+  EXT = dylib
+  LDFLAGS := -dynamiclib 
+endif
 
 SRCDIR = src
 EXAMPLE_SOURCES = $(SRCDIR)/example.c
@@ -13,10 +23,10 @@ LIB_OBJECTS := $(LIB_SOURCES:%.c=%.o)
 
 all: lib
 
-lib: lib$(NAME).so
+lib: lib$(NAME).$(EXT)
 
-lib$(NAME).so: $(LIB_OBJECTS)
-	$(CC) -shared -Wl,-soname,lib$(NAME).so $^ -o $@
+lib$(NAME).$(EXT): $(LIB_OBJECTS)
+	$(CC) $(LDFLAGS) $^ -o $@
 
 %.c: %.c.rl
 	ragel -C -G2 -o $@ $<
@@ -26,4 +36,4 @@ example: $(EXAMPLE_OBJECTS)
 
 .PHONEY: clean
 clean:
-	@$(RM) $(EXAMPLE_OBJECTS) example $(LIB_OBJECTS) lib$(NAME).so
+	@$(RM) $(EXAMPLE_OBJECTS) example $(LIB_OBJECTS) lib$(NAME).$(EXT)
