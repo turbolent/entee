@@ -3,7 +3,7 @@
 #include "parser.h"
 #include "parser_internal.h"
 
-#define BUFSIZE 0x100000
+#define BUFSIZE 0x10000
 
 // TODO:
 // - error handling, also when string methods fail
@@ -39,14 +39,14 @@ void emit(entee_parser *parser, entee_token_type type) {
 
     alphtype unsigned char;
 
-    action startMark { ts = p; }
-
-    action endMark { te = p; }
+    action mark { mark = p; }
 
     action unescape {
-        unsigned int codepoint = parse_hex(ts, te - ts);
-        if (!string_add_codepoint(parser->string, codepoint))
+        unsigned int codepoint = parse_hex(mark, p - mark);
+        mark = 0;
+        if (!string_add_codepoint(parser->string, codepoint)) {
             parser->finished = 1;
+        }
     }
 
     action endTriple {
@@ -183,8 +183,8 @@ void emit(entee_parser *parser, entee_token_type type) {
              | ('\\' ${ string_add_checked(parser->string, '\\'); })
              );
     UCHAR = '\\' .
-            (  ('u' HEX{4} >startMark %endMark %unescape)
-             | ('U' HEX{8} >startMark %endMark %unescape));
+            (  ('u' HEX{4} >mark %unescape)
+             | ('U' HEX{8} >mark %unescape));
     BLANK_NODE_LABEL = '_:' >startString (PN_CHARS_U | '0' .. '9' $putChar)
                        ((PN_CHARS | '.' $putChar)* PN_CHARS?);
     STRING_VALUE = (^(0x22 | 0x5C | 0xA | 0xD) $putChar | ECHAR | UCHAR)* >startString;
@@ -262,9 +262,9 @@ int entee_parser_parse(entee_parser *parser) {
     int cs;
     int top;
     int stack[32];
-    unsigned char *ts = 0;
-    unsigned char *te = 0;
     unsigned char buf[BUFSIZE];
+
+    unsigned char *mark = 0;
 
     %% write init;
 
@@ -297,15 +297,13 @@ int entee_parser_parse(entee_parser *parser) {
             break;
         }
 
-        if (ts == 0)
+        if (mark == 0) {
             have = 0;
-        else {
-            have = pe - ts;
-            memmove(buf, ts, have);
-            te = buf + (te - ts);
-            ts = buf;
+        } else {
+            have = pe - mark;
+            memmove(buf, mark, have);
+            mark = buf;
         }
-
     }
 
     return res;
