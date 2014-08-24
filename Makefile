@@ -31,7 +31,7 @@ lib$(NAME).$(EXT): $(LIB_OBJECTS)
 %.c: %.c.rl
 	ragel -C -G2 -o $@ $<
 
-example: $(EXAMPLE_OBJECTS)
+example: lib$(NAME).$(EXT) $(EXAMPLE_OBJECTS)
 	$(CC) $^ -L. -l$(NAME) -lz -lbz2 -Wl,-rpath,. -o $@
 
 .PHONEY: clean
