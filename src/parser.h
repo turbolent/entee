@@ -26,7 +26,7 @@ typedef enum {
     ENTEE_DATATYPE_LITERAL_IRI,
 } entee_token_type;
 
-typedef void (*entee_handler)(entee_token_type type, const char *s);
+typedef void (*entee_handler)(entee_token_type type, const char *s, void *arg);
 
 void entee_parser_set_handler(entee_parser *parser,
                               entee_handler handler,

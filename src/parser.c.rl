@@ -30,7 +30,7 @@ void emit(entee_parser *parser, entee_token_type type) {
     if (!string_end(parser->string)) {
         parser->finished = 1;
     } else {
-        parser->handler(type, parser->string->chars);
+        parser->handler(type, parser->string->chars, parser->handler_arg);
     }
 }
 
