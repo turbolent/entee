@@ -15,6 +15,24 @@ void entee_parser_set_reader(entee_parser *parser,
                              entee_reader reader,
                              void *reader_arg);
 
+/*
+
+Grammar for the triples parser:
+
+TRIPLE = SUBJECT PREDICATE OBJECT
+
+SUBJECT = ENTEE_IRI
+        | ENTEE_BLANK_NODE
+
+PREDICATE = ENTEE_IRI
+
+OBJECT = ENTEE_IRI
+       | ENTEE_BLANK_NODE
+       | ENTEE_SIMPLE_LITERAL_VALUE
+       | ENTEE_LANGUAGE_TAGGED_LITERAL_VALUE ENTEE_LANGUAGE_TAGGED_LITERAL_LANGUAGE
+       | ENTEE_DATATYPE_LITERAL_VALUE ENTEE_DATATYPE_LITERAL_IRI
+
+*/
 
 typedef enum {
     ENTEE_IRI,

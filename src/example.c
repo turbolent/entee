@@ -10,19 +10,60 @@
 #include "parser.h"
 #include "string.h"
 
+typedef enum {
+    STATE_SUBJECT,
+    STATE_PREDICATE,
+    STATE_OBJECT,
+    STATE_EXTRA
+} parser_state;
 
-int read_gzip(unsigned char* p, unsigned int len, void *read_arg) {
-    gzFile file = read_arg;
+parser_state state = STATE_SUBJECT;
+int triples = 0;
+
+int read_gzip(unsigned char* p, unsigned int len, void *arg) {
+    gzFile file = arg;
     return gzread(file, p, len);
 }
 
-int read_bzip(unsigned char* p, unsigned int len, void *read_arg) {
-    BZFILE *file = read_arg;
+int read_bzip(unsigned char* p, unsigned int len, void *arg) {
+    BZFILE *file = arg;
     return BZ2_bzread(file, p, len);
 }
 
-void handler(entee_token_type type, const char *s) {
-     printf("%d => %s\n", type, s);
+void handler(entee_token_type type, const char *s, void *arg) {
+    switch (state) {
+        case STATE_SUBJECT: {
+            printf("subject: %s\n", s);
+            state = STATE_PREDICATE;
+            triples += 1;
+            return;
+        }
+        case STATE_PREDICATE: {
+            printf("predicate: %s\n", s);
+            state = STATE_OBJECT;
+            return;
+        }
+        case STATE_OBJECT: {
+            printf("object: %s\n", s);
+            switch (type) {
+                case ENTEE_LANGUAGE_TAGGED_LITERAL_VALUE:
+                case ENTEE_DATATYPE_LITERAL_VALUE: {
+                    state = STATE_EXTRA;
+                    return;
+                }
+                default: {
+                    state = STATE_SUBJECT;
+                    return;
+                }
+            }
+            return;
+        }
+        case STATE_EXTRA: {
+            printf("...: %s\n", s);
+            state = STATE_SUBJECT;
+            return;
+        }
+    }
 }
 
 
@@ -66,11 +107,14 @@ int main(int argc, char **argv) {
     entee_reader reader = isBzip ? read_bzip : read_gzip;
 
     entee_parser_set_reader(parser, reader, file);
+
     entee_parser_set_handler(parser, handler, NULL);
 
     entee_parser_parse(parser);
 
     entee_free_parser(parser);
+
+    fprintf(stderr, "triples: %d\n", triples);
 
     // close
     if (isBzip) {
