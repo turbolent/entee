@@ -102,8 +102,11 @@ void emit(entee_parser *parser, entee_token_type type) {
 
     WS = ' ' | '\t';
     EOL = '\r' | '\n';
-    HEX = '0' .. '9' | 'A' .. 'F' | 'a' .. 'f';
-    PN_CHARS_BASE = ('A' .. 'Z' | 'a' .. 'z'
+    ALPHA = 'A' .. 'Z'
+          | 'a' .. 'z';
+    DIGIT = '0' .. '9';
+    HEX = DIGIT | 'A' .. 'F' | 'a' .. 'f';
+    PN_CHARS_BASE = (ALPHA
                      # The N-Triple spec specifies Unicode codepoints,
                      # but files are encoded (and parsed) as UTF-8:
                      # 0x00C0 .. 0x00D6
@@ -162,16 +165,17 @@ void emit(entee_parser *parser, entee_token_type type) {
                      | 0xF3 0xAF 0x01..0xBE 0x00..0xFF
                      | 0xF3 0xAF 0xBF 0x00..0xBF
                      ) $putChar;
-    PN_CHARS_U = PN_CHARS_BASE | (('_' | ':') $putChar);
+    PN_CHARS_U = PN_CHARS_BASE
+               | ('_' | ':') $putChar;
     PN_CHARS = PN_CHARS_U
-               | (('-' | '0' .. '9' | 0x00B7
-                   # 0x0300 .. 0x036F
-                   | 0xCC 0x80..0xFF
-                   | 0xCD 0x00..0xAF
-                   # 0x203F .. 0x2040
-                   | 0xE2 0x80 0xBF..0xFF
-                   | 0xE2 0x81 0x00..0x80)
-                  $putChar);
+               | ('-' | DIGIT | 0x00B7
+                  # 0x0300 .. 0x036F
+                  | 0xCC 0x80..0xFF
+                  | 0xCD 0x00..0xAF
+                  # 0x203F .. 0x2040
+                  | 0xE2 0x80 0xBF..0xFF
+                  | 0xE2 0x81 0x00..0x80
+                  ) $putChar;
     ECHAR = '\\' .
             (  ('t' ${ string_add_checked(parser->string, '\t'); })
              | ('b' ${ string_add_checked(parser->string, '\b'); })
@@ -185,33 +189,48 @@ void emit(entee_parser *parser, entee_token_type type) {
     UCHAR = '\\' .
             (  ('u' HEX{4} >mark %unescape)
              | ('U' HEX{8} >mark %unescape));
-    BLANK_NODE_LABEL = '_:' >startString (PN_CHARS_U | '0' .. '9' $putChar)
-                       ((PN_CHARS | '.' $putChar)* PN_CHARS?);
-    STRING_VALUE = (^(0x22 | 0x5C | 0xA | 0xD) $putChar | ECHAR | UCHAR)* >startString;
-    IRIREF_VALUE = (^(0x00 .. 0x20 | '<' | '>' | '"' | '{' | '}' | '|' | '^' | '`' | '\\') $putChar | UCHAR)*
+    STRING_VALUE = (^(0x22 | 0x5C | 0xA | 0xD) $putChar
+                    | ECHAR
+                    | UCHAR)*
                    >startString;
+    scheme = (ALPHA (ALPHA | DIGIT | '+' | '-' | '.')*) $putChar;
+    IRIREF_VALUE = scheme >startString ':' $putChar
+                   (^(0x00 .. 0x20
+                      | '<' | '>'
+                      | '"' | '{' | '}'
+                      | '|' | '^' | '`' | '\\') $putChar
+                    | UCHAR)*;
     IRIREF = '<' IRIREF_VALUE '>';
-    LANGTAG_VALUE = (('a' .. 'z' | 'A' .. 'Z') $putChar)+ >startString
-                    ('-' $putChar (('a' .. 'z' | 'A' .. 'Z' | '0' .. '9') $putChar)+)*;
-    datatypeLiteral = '"' STRING_VALUE '"' '^^' >datatypeLiteral IRIREF %endDatatypeLiteral;
-    langtagLiteral =  '"' STRING_VALUE '"' '@' >langtagLiteral LANGTAG_VALUE %endLangtagLiteral;
+    BLANK_NODE_LABEL = '_:' >startString
+                       (PN_CHARS_U | DIGIT $putChar)
+                       ((PN_CHARS | '.' $putChar)* PN_CHARS)?;
+    LANGTAG_VALUE = ALPHA+ $putChar >startString
+                    ('-' $putChar ((ALPHA | DIGIT) $putChar)+)*;
+    datatypeLiteral = '"' STRING_VALUE '"' '^^' >datatypeLiteral
+                      IRIREF %endDatatypeLiteral;
+    langtagLiteral = '"' STRING_VALUE '"' '@' >langtagLiteral
+                     LANGTAG_VALUE %endLangtagLiteral;
     simpleLiteral = '"' STRING_VALUE '"' %endSimpleLiteral;
-    literal = datatypeLiteral | langtagLiteral | simpleLiteral;
-    subject = IRIREF %endIRI
-            | BLANK_NODE_LABEL %endBlankNode;
-    predicate = IRIREF %endIRI;
+    literal = datatypeLiteral
+            | langtagLiteral
+            | simpleLiteral;
+    iri = IRIREF %endIRI;
+    blankNode = BLANK_NODE_LABEL %endBlankNode;
+    subject = iri
+            | blankNode;
+    predicate = iri;
     object = literal
-           | IRIREF %endIRI
-           | BLANK_NODE_LABEL %endBlankNode;
-    comment = '#' (any - EOL)*;
-    # TODO: ensure left-guarded concatenation is correctly preventing
-    #       ambiguity of blank nodes with dots
-    triple = subject WS* predicate WS* object WS* <: '.' WS* %endTriple;
-    line = WS* ( comment | triple )? (EOL %endLine)+;
-    gobble_line := (any -- EOL)* EOL @{ fcall main; };
+           | iri
+           | blankNode;
+    triple = subject WS* predicate WS* object WS* :>> '.' WS* %endTriple;
+    comment = '#' (any -- EOL)*;
+    line = WS* triple? comment? (EOL @endLine)+;
+    skip_line := (any -- EOL)* (EOL @endLine) @{
+        fgoto main;
+    };
     main := line* $err{
-        // failed on line arser->line
-        fhold; fgoto gobble_line;
+        // TODO: failed on line parser->line
+        fhold; fgoto skip_line;
     };
 
     write data;
@@ -257,16 +276,14 @@ int entee_parser_parse(entee_parser *parser) {
         return 0;
     }
 
-    int res = 1;
-    int have = 0;
     int cs;
-    int top;
-    int stack[32];
-    unsigned char buf[BUFSIZE];
-
-    unsigned char *mark = 0;
 
     %% write init;
+
+    int res = 1;
+    unsigned char buf[BUFSIZE];
+    unsigned char *mark = 0;
+    int have = 0;
 
     entee_reader reader = parser->reader;
 
@@ -295,14 +312,12 @@ int entee_parser_parse(entee_parser *parser) {
         if (cs == ntriples_error) {
             res = 0;
             break;
-        }
-
-        if (mark == 0) {
-            have = 0;
-        } else {
+        } else if (mark) {
             have = pe - mark;
             memmove(buf, mark, have);
             mark = buf;
+        } else {
+            have = 0;
         }
     }
 
